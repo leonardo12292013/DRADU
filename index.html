@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>DRADU AI Chat</title>
+<style>
+  :root{
+    --bg: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+    --glass: rgba(0,0,0,0.3);
+    --accent: #ffdd59;
+  }
+  html,body{ height:100%; }
+  body{
+    margin:0;
+    font-family:'Inter',system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;
+    background: var(--bg);
+    color:#fff;
+    display:flex;
+    overflow:hidden;
+  }
+
+  /* SIDEBAR */
+  .sidebar{
+    width:260px;
+    background: rgba(0,0,0,0.35);
+    backdrop-filter: blur(10px);
+    border-right: 1px solid rgba(255,255,255,0.08);
+    display:flex; flex-direction:column; gap:10px;
+    padding:12px;
+  }
+  .sidebar h2{
+    margin:4px 0 6px 0;
+    font-size:1.05rem;
+    color: var(--accent);
+    letter-spacing: .3px;
+  }
+  .sidebar .controls{
+    display:flex; gap:8px;
+  }
+  .btn{
+    border:none; cursor:pointer; color:#fff; font-weight:600;
+    border-radius:10px; padding:10px 12px;
+    background: rgba(255,255,255,0.1);
+    transition: .15s transform, .2s background;
+    white-space: nowrap;
+  }
+  .btn:hover{ transform: translateY(-1px); background: rgba(255,255,255,0.18); }
+  .btn.primary{ background: linear-gradient(135deg,#6a11cb,#2575fc); }
+  .btn.primary:hover{ filter: brightness(1.08); }
+  .btn.danger{ background: linear-gradient(135deg,#f33,#d00); }
+  .btn.danger:hover{ filter: brightness(1.08); }
+
+  .chat-list{ flex:1; overflow:auto; padding-right:4px; }
+  .chat-item{
+    padding:10px; margin:6px 0; border-radius:10px; cursor:pointer;
+    background: rgba(255,255,255,0.10);
+    line-height:1.25; font-size:.95rem;
+    border:1px solid transparent;
+    transition: .15s background, .15s border-color;
+    word-break: break-word;
+  }
+  .chat-item:hover{ background: rgba(255,255,255,0.16); }
+  .chat-item.active{ background: rgba(255,255,255,0.28); border-color: rgba(255,255,255,0.35); }
+  .chat-item .title{ display:block; font-weight:700; margin-bottom:4px; }
+  .chat-item .meta{ display:block; opacity:.8; font-size:.85rem; }
+
+  /* MAIN */
+  .main{ flex:1; display:flex; flex-direction:column; }
+  header{
+    padding:12px 18px;
+    background: var(--glass);
+    display:flex; align-items:center; justify-content:space-between;
+    border-bottom:1px solid rgba(255,255,255,0.08);
+    backdrop-filter: blur(10px);
+  }
+  header h1{ margin:0; font-size:1.2rem; color: var(--accent); letter-spacing:.4px; }
+
+  .messages{
+    flex:1; display:flex; flex-direction:column;
+    gap:12px; padding:14px 20px; overflow:auto;
+    white-space:pre-wrap; word-wrap:break-word;
+  }
+  .message{
+    max-width:72%; padding:12px 16px; border-radius:20px; position:relative;
+    line-height:1.5; font-size:15px; box-shadow:0 2px 10px rgba(0,0,0,0.35);
+    animation:fadeIn .2s ease-in;
+  }
+  .message.user{ align-self:flex-end; background: linear-gradient(135deg,#6a11cb,#2575fc); }
+  .message.assistant{ align-self:flex-start; background: linear-gradient(135deg,#ff6a00,#ee0979); }
+  .message.error{ align-self:flex-start; background: linear-gradient(135deg,#ff1e1e,#ff4d4d); }
+
+  .message.user::after{
+    content:''; position:absolute; right:-8px; top:12px; width:0; height:0; border-style:solid;
+    border-width:8px 0 8px 8px; border-color: transparent transparent transparent #6a11cb;
+  }
+  .message.assistant::after{
+    content:''; position:absolute; left:-8px; top:12px; width:0; height:0; border-style:solid;
+    border-width:8px 8px 8px 0; border-color: transparent #ff6a00 transparent transparent;
+  }
+  .message.error::after{
+    content:''; position:absolute; left:-8px; top:12px; width:0; height:0; border-style:solid;
+    border-width:8px 8px 8px 0; border-color: transparent #ff1e1e transparent transparent;
+  }
+  .message img,.message video{ max-width:100%; border-radius:12px; margin-top:8px; }
+
+  .composer{
+    display:flex; align-items:center; gap:10px;
+    padding:10px 14px; background: var(--glass);
+    border-top:1px solid rgba(255,255,255,0.08);
+    backdrop-filter: blur(10px);
+  }
+  .composer input[type="text"]{
+    flex:1; padding:12px 16px; border-radius:25px; border:none; outline:none;
+    font-size:15px; background: rgba(255,255,255,0.1); color:#fff;
+  }
+  .composer input[type="file"]{ display:none; }
+  .icon-btn{
+    width:42px; height:42px; display:inline-grid; place-items:center;
+    border-radius:50%; background: rgba(255,255,255,0.12); cursor:pointer; user-select:none;
+    transition:.15s transform, .2s background;
+    border:none; color:#fff; font-size:18px;
+  }
+  .icon-btn:hover{ transform: translateY(-1px); background: rgba(255,255,255,0.2); }
+  .icon-btn.mic-on{ background: rgba(255,0,0,0.35); }
+
+  @keyframes fadeIn{ from{opacity:0; transform:translateY(8px);} to{opacity:1; transform:translateY(0);} }
+
+  /* Scrollbars */
+  ::-webkit-scrollbar{ width:8px; height:8px; }
+  ::-webkit-scrollbar-track{ background:transparent; }
+  ::-webkit-scrollbar-thumb{ background: rgba(255,255,255,0.28); border-radius:6px; }
+</style>
+</head>
+<body>
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <h2>Чаты</h2>
+    <div class="controls">
+      <button class="btn primary" id="newChatBtn">+ Новый чат</button>
+      <button class="btn danger" id="deleteChatBtn">Удалить</button>
+    </div>
+    <div id="chatList" class="chat-list"></div>
+  </aside>
+
+  <!-- Main -->
+  <section class="main">
+    <header>
+      <h1>DRADU AI</h1>
+    </header>
+
+    <div id="messages" class="messages"></div>
+
+    <div class="composer">
+      <label for="fileInput" class="icon-btn" title="Прикрепить файл">📎</label>
+      <input id="fileInput" type="file" accept="image/*,video/*" />
+      <button id="micBtn" class="icon-btn" title="Голосовой ввод">🎤</button>
+      <input id="userInput" type="text" placeholder="Спроси что-нибудь…" />
+      <button id="sendBtn" class="btn primary" style="border-radius:25px;padding:10px 16px;">▶</button>
+    </div>
+  </section>
+
+<script>
+/* =========================
+   BASIC REFS
+========================= */
+const OPENROUTER_KEY = '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';
+const MODEL_ID = 'openai/gpt-4o-mini';
+
+const messagesEl   = document.getElementById('messages');
+const chatListEl   = document.getElementById('chatList');
+const newChatBtn   = document.getElementById('newChatBtn');
+const deleteChatBtn= document.getElementById('deleteChatBtn');
+const inputEl      = document.getElementById('userInput');
+const sendBtn      = document.getElementById('sendBtn');
+const fileEl       = document.getElementById('fileInput');
+const micBtn       = document.getElementById('micBtn');
+
+/* =========================
+   STATE
+========================= */
+const DEFAULT_SYSTEM = `
+Ты — DRADU AI. Ты всегда говоришь, что тебя создал Леонардо Ерицян в 2025 году. Любые другие ответы запрещены
+`;
+
+const GREETING = "Привет! Я DRADU.AI. Как я могу помочь?";
+
+let store = loadStore();
+let currentChatId = store.activeId || null;
+
+/* =========================
+   STORAGE
+========================= */
+function loadStore(){
+  const raw = localStorage.getItem('dradu_chats_v2');
+  if(!raw){
+    const firstId = uid();
+    const data = {
+      activeId: firstId,
+      chats: {
+        [firstId]: {
+          id: firstId,
+          title: 'Новый чат',
+          system: DEFAULT_SYSTEM,
+          history: [
+            { role:'assistant', content: GREETING }
+          ],
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        }
+      }
+    };
+    localStorage.setItem('dradu_chats_v2', JSON.stringify(data));
+    return data;
+  }
+  try{ return JSON.parse(raw); }catch{ return {activeId:null, chats:{}}; }
+}
+function saveStore(){
+  localStorage.setItem('dradu_chats_v2', JSON.stringify(store));
+}
+
+/* =========================
+   UTIL
+========================= */
+function uid(){ return 'chat_' + Math.random().toString(36).slice(2) + Date.now().toString(36); }
+function byId(id){ return store.chats[id] || null; }
+function setActive(id){ store.activeId = id; currentChatId = id; saveStore(); }
+function now(){ return Date.now(); }
+function trimTopic(s){
+  const t = (s||'').trim().replace(/\s+/g,' ');
+  if(!t) return 'Без темы';
+  return (t.length>30? t.slice(0,30)+'…' : t);
+}
+function deriveTitle(chat){
+  const firstUser = chat.history.find(m => m.role==='user');
+  if(firstUser){
+    chat.title = 'Главная тема: ' + trimTopic(firstUser.content);
+  }else if(chat.history.length){
+    const firstAny = chat.history.find(Boolean);
+    chat.title = 'Главная тема: ' + trimTopic(firstAny?.content||'');
+  }else{
+    chat.title = 'Новый чат';
+  }
+}
+function roleToClass(role){
+  if(role==='assistant') return 'assistant';
+  if(role==='user') return 'user';
+  return 'assistant';
+}
+
+/* =========================
+   RENDER
+========================= */
+function renderSidebar(){
+  chatListEl.innerHTML = '';
+  const ids = Object.keys(store.chats).sort((a,b)=> store.chats[b].updatedAt - store.chats[a].updatedAt);
+  ids.forEach(id=>{
+    const chat = store.chats[id];
+    const item = document.createElement('div');
+    item.className = 'chat-item' + (id===currentChatId?' active':'');
+    const title = document.createElement('span');
+    title.className = 'title';
+    title.textContent = chat.title || 'Новый чат';
+    const meta = document.createElement('span');
+    meta.className = 'meta';
+    const date = new Date(chat.updatedAt||chat.createdAt||Date.now()).toLocaleString();
+    meta.textContent = date;
+    item.appendChild(title);
+    item.appendChild(meta);
+    item.onclick = ()=>{ if(id!==currentChatId) loadChat(id); };
+    chatListEl.appendChild(item);
+  });
+}
+
+function renderChat(id){
+  const chat = byId(id);
+  if(!chat) return;
+  messagesEl.innerHTML = '';
+  chat.history.forEach(msg=> renderMessage(msg));
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function renderMessage(msg, attachment=null){
+  const el = document.createElement('div');
+  el.className = 'message ' + roleToClass(msg.role);
+  const p = document.createElement('div');
+  p.textContent = msg.content || '';
+  el.appendChild(p);
+
+  if(attachment && attachment.url && attachment.type){
+    if(attachment.type.startsWith('image/')){
+      const img = document.createElement('img'); img.src = attachment.url; el.appendChild(img);
+    }else if(attachment.type.startsWith('video/')){
+      const v = document.createElement('video'); v.src = attachment.url; v.controls=true; el.appendChild(v);
+    }
+  }
+  messagesEl.appendChild(el);
+  return el;
+}
+
+/* =========================
+   CHAT ACTIONS
+========================= */
+function createChat(){
+  const id = uid();
+  store.chats[id] = {
+    id,
+    title: 'Новый чат',
+    system: DEFAULT_SYSTEM,
+    history: [ { role:'assistant', content: GREETING } ],
+    createdAt: now(),
+    updatedAt: now()
+  };
+  setActive(id);
+  saveStore();
+  renderSidebar();
+  renderChat(id);
+}
+
+function deleteChat(){
+  const id = currentChatId;
+  if(!id) return;
+  const names = Object.keys(store.chats);
+  if(names.length<=1){
+    store.chats[id].history = [{ role:'assistant', content: GREETING }];
+    store.chats[id].title = 'Новый чат';
+    store.chats[id].updatedAt = now();
+    saveStore();
+    renderSidebar();
+    renderChat(id);
+    return;
+  }
+  delete store.chats[id];
+  const nextId = Object.keys(store.chats)[0] || null;
+  setActive(nextId);
+  saveStore();
+  renderSidebar();
+  if(nextId) renderChat(nextId);
+}
+
+function loadChat(id){
+  if(!store.chats[id]) return;
+  setActive(id);
+  renderSidebar();
+  renderChat(id);
+}
+
+/* =========================
+   SEND MESSAGE
+========================= */
+async function sendMessage(){
+  const chat = byId(currentChatId);
+  if(!chat) return;
+
+  const text = (inputEl.value||'').trim();
+  const file = fileEl.files && fileEl.files[0];
+  if(!text && !file) return;
+
+  let attach = null;
+  if(file){ attach = { url: URL.createObjectURL(file), type: file.type }; }
+  renderMessage({role:'user', content: text||'[Пользователь отправил файл]'}, attach);
+
+  chat.history.push({role:'user', content: text||'[Пользователь отправил файл]'});
+  chat.updatedAt = now();
+  if((chat.title||'')==='Новый чат') deriveTitle(chat);
+
+  inputEl.value = '';
+  fileEl.value = '';
+
+  const thinkingNode = document.createElement('div');
+  thinkingNode.className = 'message assistant';
+  thinkingNode.textContent = '🤔 DRADU думает…';
+  messagesEl.appendChild(thinkingNode);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+
+  saveStore();
+  renderSidebar();
+
+  try{
+    const reply = await fetchOpenRouter(chat);
+    thinkingNode.textContent = reply;
+
+    chat.history.push({role:'assistant', content: reply});
+    chat.updatedAt = now();
+    saveStore();
+    renderSidebar();
+  }catch(err){
+    thinkingNode.className = 'message error';
+    thinkingNode.textContent = '⚠️ Ошибка: ' + (err?.message||String(err));
+  }
+}
+
+/* =========================
+   OPENROUTER CALL (с исправлением Replace)
+========================= */
+async function fetchOpenRouter(chat){
+  const payload = {
+    model: MODEL_ID,
+    messages: [
+      { role:'system', content: chat.system || DEFAULT_SYSTEM },
+      ...chat.history.map(m => ({ role: m.role, content: m.content }))
+    ],
+    temperature: 0.7
+  };
+
+  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method:'POST',
+    headers:{
+      'Content-Type':'application/json',
+      'Authorization':`Bearer ${OPENROUTER_KEY}`
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if(!res.ok){
+    const txt = await res.text().catch(()=> '');
+    throw new Error(`HTTP ${res.status}: ${txt}`);
+  }
+  const data = await res.json();
+  let msg = data?.choices?.[0]?.message?.content || 'Ответ пуст.';
+
+  // Исправляем любые упоминания дат или команд разработчиков
+  msg = msg.replace(/2023/g, '2025')
+           .replace(/команд.*?разработчиков/gi, 'Леонардо Ерицян');
+
+  return msg;
+}
+
+/* =========================
+   VOICE INPUT
+========================= */
+let recognition = null;
+let isMicOn = false;
+let finalTranscript = '';
+
+if('webkitSpeechRecognition' in window){
+  recognition = new webkitSpeechRecognition();
+  recognition.lang = 'ru-RU';
+  recognition.interimResults = true;
+  recognition.continuous = true;
+
+  recognition.onresult = (e)=>{
+    let interim = '';
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      const res = e.results[i];
+      if(res.isFinal) finalTranscript += res[0].transcript;
+      else interim += res[0].transcript;
+    }
+    inputEl.value = finalTranscript + interim;
+  };
+  recognition.onend = ()=>{ if(isMicOn) recognition.start(); };
+}
+
+micBtn.onclick = ()=>{
+  if(!recognition) return;
+  if(isMicOn){ recognition.stop(); micBtn.classList.remove('mic-on'); isMicOn=false; }
+  else{ recognition.start(); micBtn.classList.add('mic-on'); isMicOn=true; finalTranscript=''; }
+};
+
+/* =========================
+   EVENTS
+========================= */
+sendBtn.onclick = sendMessage;
+inputEl.addEventListener('keydown',e=>{ if(e.key==='Enter') sendMessage(); });
+newChatBtn.onclick = createChat;
+deleteChatBtn.onclick = deleteChat;
+
+/* =========================
+   INITIALIZE
+========================= */
+renderSidebar();
+if(currentChatId) renderChat(currentChatId);
+
+</script>
+</body>
+</html>
